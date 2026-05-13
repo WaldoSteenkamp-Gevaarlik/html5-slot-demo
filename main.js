@@ -1,8 +1,15 @@
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 600,
+
+    width: 1000,
+    height: 700,
+
     backgroundColor: '#1a1a1a',
+
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
 
     scene: {
         preload: preload,
@@ -22,16 +29,46 @@ let symbols = [
     "grapes"
 ];
 
-// REELS
-let reelTexts = [];
+// SYMBOL VALUES
+let symbolValues = {
+    cherry: 5,
+    lemon: 5,
+    star: 10,
+    seven: 25,
+    diamond: 15,
+    grapes: 8
+};
+
+// GRID SETTINGS
+const ROWS = 5;
+const COLS = 6;
+
+// GRID POSITION
+const START_X = 250;
+const START_Y = 190;
+
+const SPACING_X = 100;
+const SPACING_Y = 80;
+
+// GRID ARRAYS
+let grid = [];
+let backgrounds = [];
+
+// MASK
+let reelMask;
 
 // PLAYER DATA
 let credits = 100;
 let betAmount = 10;
 
+// TOTAL TUMBLE WIN
+let tumbleTotalWin = 0;
+let isTumbling = false;
+
 // UI
 let creditsText;
 let resultText;
+
 let isSpinning = false;
 
 function preload() {
@@ -47,64 +84,56 @@ function preload() {
 
 function create() {
 
-    // TITLE
-    this.add.text(190, 50, 'MY SLOT MACHINE', {
+    // TITLE CENTERED
+    this.add.text(500, 40, 'MY SLOT MACHINE', {
         fontSize: '40px',
         color: '#ffffff'
-    });
+    }).setOrigin(0.5);
 
-    // CREDITS
-    creditsText = this.add.text(20, 20, 'Credits: 100', {
-        fontSize: '32px',
+    // CREDITS BOTTOM LEFT
+    creditsText = this.add.text(20, 650, 'Credits: 100', {
+        fontSize: '28px',
         color: '#ffff00'
     });
 
-    // RESULT TEXT
-    resultText = this.add.text(260, 150, '', {
-        fontSize: '40px',
+    // RESULT TEXT CENTERED
+    resultText = this.add.text(500, 585, 'READY', {
+        fontSize: '32px',
         color: '#00ff00'
-    });
+    }).setOrigin(0.5);
 
-    // REEL BACKGROUNDS
-    for (let i = 0; i < 3; i++) {
+    resultText.setDepth(100);
 
-        this.add.rectangle(
-            250 + (i * 120),
-            290,
-            100,
-            140,
-            0x333333
-        )
-        .setStrokeStyle(4, 0xffffff);
-    }
+    // CREATE MASK
+    const maskShape = this.make.graphics({});
 
-    // CREATE REELS
-    for (let i = 0; i < 3; i++) {
+    maskShape.fillStyle(0xffffff);
 
-        let randomSymbol = Phaser.Utils.Array.GetRandom(symbols);
+    maskShape.fillRect(
+        200,
+        145,
+        620,
+        430
+    );
 
-        let reel = this.add.image(
-            250 + (i * 120),
-            290,
-            randomSymbol
-        );
+    reelMask = maskShape.createGeometryMask();
 
-        reel.setDisplaySize(90, 90);
+    createGrid(this);
 
-        reelTexts.push(reel);
-    }
-
-    // SPIN BUTTON
-    const spinButton = this.add.text(330, 500, 'SPIN', {
+    // SPIN BUTTON CENTERED
+    const spinButton = this.add.text(500, 640, 'SPIN', {
         fontSize: '32px',
         backgroundColor: '#ff0000',
+        color: '#ffffff',
         padding: {
             left: 20,
             right: 20,
             top: 10,
             bottom: 10
         }
-    });
+    }).setOrigin(0.5);
+
+    spinButton.setDepth(100);
 
     spinButton.setInteractive();
 
@@ -115,87 +144,386 @@ function create() {
     });
 }
 
+function createGrid(scene) {
+
+    for (let row = 0; row < ROWS; row++) {
+
+        grid[row] = [];
+        backgrounds[row] = [];
+
+        for (let col = 0; col < COLS; col++) {
+
+            let x = START_X + (col * SPACING_X);
+            let y = START_Y + (row * SPACING_Y);
+
+            // BACKGROUND TILE
+            let bg = scene.add.rectangle(
+                x,
+                y,
+                85,
+                85,
+                0x333333
+            )
+            .setStrokeStyle(3, 0xffffff);
+
+            backgrounds[row][col] = bg;
+
+            // RANDOM SYMBOL
+            let randomSymbol = Phaser.Utils.Array.GetRandom(symbols);
+
+            // SYMBOL IMAGE
+            let symbol = scene.add.image(
+                x,
+                y,
+                randomSymbol
+            );
+
+            symbol.setDisplaySize(65, 65);
+
+            symbol.setMask(reelMask);
+
+            symbol.originalX = x;
+            symbol.originalY = y;
+
+            grid[row][col] = symbol;
+        }
+    }
+}
+
 function spinReels() {
 
-    // STOP DOUBLE SPINS
     if (isSpinning) {
         return;
     }
 
     isSpinning = true;
 
+    tumbleTotalWin = 0;
+    isTumbling = true;
+
+    // RESET GRID
+    for (let row = 0; row < ROWS; row++) {
+
+        for (let col = 0; col < COLS; col++) {
+
+            backgrounds[row][col].setFillStyle(0x333333);
+
+            if (grid[row][col] !== null) {
+
+                grid[row][col].setVisible(true);
+
+                grid[row][col].y = grid[row][col].originalY;
+            }
+        }
+    }
+
     // REMOVE BET
     credits -= betAmount;
 
     creditsText.setText("Credits: " + credits);
 
-    resultText.setText("");
+    resultText.setText("SPINNING...");
 
-    let finalSymbols = [];
+    // SPIN EFFECT
+    let spinInterval = setInterval(() => {
 
-    for (let i = 0; i < reelTexts.length; i++) {
+        for (let row = 0; row < ROWS; row++) {
 
-        let reel = reelTexts[i];
+            for (let col = 0; col < COLS; col++) {
 
-        // SPIN ANIMATION TIMER
-        let spinInterval = setInterval(() => {
+                if (grid[row][col] !== null) {
 
-            let randomSymbol = Phaser.Utils.Array.GetRandom(symbols);
+                    let symbol = grid[row][col];
 
-            reel.setTexture(randomSymbol);
+                    let randomSymbol =
+                        Phaser.Utils.Array.GetRandom(symbols);
 
-            // FAKE MOVEMENT EFFECT
-            reel.y += 10;
+                    symbol.setTexture(randomSymbol);
 
-            if (reel.y > 310) {
-                reel.y = 270;
+                    symbol.y =
+                        symbol.originalY +
+                        Phaser.Math.Between(-2, 2);
+                }
             }
+        }
 
-        }, 80);
+    }, 80);
 
-        // STOP REEL
-        setTimeout(() => {
+    // STOP SPIN
+    setTimeout(() => {
 
-            clearInterval(spinInterval);
+        clearInterval(spinInterval);
 
-            let finalSymbol = Phaser.Utils.Array.GetRandom(symbols);
+        for (let row = 0; row < ROWS; row++) {
 
-            reel.setTexture(finalSymbol);
+            for (let col = 0; col < COLS; col++) {
 
-            reel.y = 290;
+                if (grid[row][col] !== null) {
 
-            finalSymbols[i] = finalSymbol;
+                    let symbol = grid[row][col];
 
-            // LAST REEL FINISHED
-            if (i === reelTexts.length - 1) {
+                    let finalSymbol =
+                        Phaser.Utils.Array.GetRandom(symbols);
 
-                checkWin(finalSymbols);
+                    symbol.setTexture(finalSymbol);
 
-                isSpinning = false;
+                    symbol.y = symbol.originalY;
+                }
             }
+        }
 
-        }, 1500 + (i * 700));
-    }
+        checkWin();
+
+        isSpinning = false;
+
+    }, 2000);
 }
 
-function checkWin(finalSymbols) {
+function checkWin() {
 
-    // 3 MATCHING SYMBOLS
-    if (
-        finalSymbols[0] === finalSymbols[1] &&
-        finalSymbols[1] === finalSymbols[2]
-    ) {
+    let counts = {};
 
-        let winAmount = betAmount * 5;
+    let winningPositions = [];
 
-        credits += winAmount;
+    // RESET TILE COLORS
+    for (let row = 0; row < ROWS; row++) {
 
-        creditsText.setText("Credits: " + credits);
+        for (let col = 0; col < COLS; col++) {
 
-        resultText.setText("YOU WIN!");
+            backgrounds[row][col]
+                .setFillStyle(0x333333);
+        }
+    }
+
+    // COUNT SYMBOLS
+    for (let row = 0; row < ROWS; row++) {
+
+        for (let col = 0; col < COLS; col++) {
+
+            if (grid[row][col] !== null) {
+
+                let symbolKey =
+                    grid[row][col].texture.key;
+
+                if (!counts[symbolKey]) {
+
+                    counts[symbolKey] = 0;
+                }
+
+                counts[symbolKey]++;
+            }
+        }
+    }
+
+    let totalWin = 0;
+
+    // CHECK WINS
+    for (let symbol in counts) {
+
+        if (counts[symbol] >= 8) {
+
+            let winAmount =
+                symbolValues[symbol] *
+                counts[symbol];
+
+            totalWin += winAmount;
+
+            // STORE WINNING POSITIONS
+            for (let row = 0; row < ROWS; row++) {
+
+                for (let col = 0; col < COLS; col++) {
+
+                    if (
+                        grid[row][col] !== null &&
+                        grid[row][col].texture.key === symbol
+                    ) {
+
+                        backgrounds[row][col]
+                            .setFillStyle(0xffff00);
+
+                        winningPositions.push({
+                            row: row,
+                            col: col
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // WIN
+    if (totalWin > 0) {
+
+        tumbleTotalWin += totalWin;
+
+        resultText.setText(
+            "TOTAL WIN " + tumbleTotalWin
+        );
+
+        setTimeout(() => {
+
+            removeWinningSymbols(winningPositions);
+
+        }, 800);
     }
     else {
 
-        resultText.setText("TRY AGAIN");
+        if (isTumbling) {
+
+            credits += tumbleTotalWin;
+
+            creditsText.setText(
+                "Credits: " + credits
+            );
+
+            resultText.setText(
+                "PAID " + tumbleTotalWin
+            );
+
+            isTumbling = false;
+        }
     }
+}
+
+function removeWinningSymbols(winningPositions) {
+
+    for (let i = 0; i < winningPositions.length; i++) {
+
+        let pos = winningPositions[i];
+
+        let symbol = grid[pos.row][pos.col];
+
+        symbol.setVisible(false);
+
+        grid[pos.row][pos.col] = null;
+
+        backgrounds[pos.row][pos.col]
+            .setFillStyle(0x333333);
+    }
+
+    resultText.setText(
+        "TOTAL WIN " + tumbleTotalWin
+    );
+
+    setTimeout(() => {
+
+        dropSymbols();
+
+    }, 500);
+}
+
+function dropSymbols() {
+
+    for (let col = 0; col < COLS; col++) {
+
+        let symbolKeys = [];
+
+        for (let row = ROWS - 1; row >= 0; row--) {
+
+            if (grid[row][col] !== null) {
+
+                symbolKeys.push(
+                    grid[row][col].texture.key
+                );
+
+                grid[row][col].destroy();
+
+                grid[row][col] = null;
+            }
+        }
+
+        let currentRow = ROWS - 1;
+
+        for (let i = 0; i < symbolKeys.length; i++) {
+
+            let x =
+                START_X + (col * SPACING_X);
+
+            let targetY =
+                START_Y + (currentRow * SPACING_Y);
+
+            let startY = targetY - 120;
+
+            let symbol =
+                game.scene.scenes[0].add.image(
+                    x,
+                    startY,
+                    symbolKeys[i]
+                );
+
+            symbol.setDisplaySize(65, 65);
+
+            symbol.setMask(reelMask);
+
+            symbol.originalX = x;
+            symbol.originalY = targetY;
+
+            grid[currentRow][col] = symbol;
+
+            game.scene.scenes[0].tweens.add({
+                targets: symbol,
+                y: targetY,
+                duration: 300
+            });
+
+            currentRow--;
+        }
+    }
+
+    setTimeout(() => {
+
+        spawnNewSymbols();
+
+    }, 350);
+}
+
+function spawnNewSymbols() {
+
+    for (let col = 0; col < COLS; col++) {
+
+        for (let row = 0; row < ROWS; row++) {
+
+            if (grid[row][col] === null) {
+
+                let x =
+                    START_X + (col * SPACING_X);
+
+                let finalY =
+                    START_Y + (row * SPACING_Y);
+
+                let startY = finalY - 300;
+
+                let randomSymbol =
+                    Phaser.Utils.Array.GetRandom(symbols);
+
+                let symbol =
+                    game.scene.scenes[0].add.image(
+                        x,
+                        startY,
+                        randomSymbol
+                    );
+
+                symbol.setDisplaySize(65, 65);
+
+                symbol.setMask(reelMask);
+
+                symbol.originalX = x;
+                symbol.originalY = finalY;
+
+                grid[row][col] = symbol;
+
+                game.scene.scenes[0].tweens.add({
+                    targets: symbol,
+                    y: finalY,
+                    duration: 400
+                });
+            }
+        }
+    }
+
+    setTimeout(() => {
+
+        checkWin();
+
+    }, 500);
 }
