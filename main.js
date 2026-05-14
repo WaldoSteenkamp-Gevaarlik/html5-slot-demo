@@ -6,10 +6,18 @@ const config = {
 
     backgroundColor: '#1a1a1a',
 
+    render: {
+        antialias: true,
+        pixelArt: false,
+        roundPixels: false
+    },
+
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
+
+    resolution: window.devicePixelRatio,
 
     scene: {
         preload: preload,
@@ -19,92 +27,271 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-// SYMBOL NAMES
+// SYMBOLS
 let symbols = [
+    "apple",
+    "banana",
     "cherry",
-    "lemon",
-    "star",
-    "seven",
     "diamond",
-    "grapes"
+    "grapes",
+    "lemon",
+    "seven",
+    "star",
+    "watermelon",
+    "scatter"
 ];
+
+let tumbleMultipliers = [];
 
 // SYMBOL VALUES
 let symbolValues = {
+
+    apple: 4,
+    banana: 4,
+
     cherry: 5,
     lemon: 5,
+
+    watermelon: 6,
+    grapes: 8,
+
     star: 10,
-    seven: 25,
     diamond: 15,
-    grapes: 8
+
+    seven: 25
 };
 
 // GRID SETTINGS
 const ROWS = 5;
 const COLS = 6;
 
-// GRID POSITION
 const START_X = 250;
 const START_Y = 190;
 
 const SPACING_X = 100;
 const SPACING_Y = 80;
 
-// GRID ARRAYS
+// GRID
 let grid = [];
 let backgrounds = [];
+
+
 
 // MASK
 let reelMask;
 
-// PLAYER DATA
+// PLAYER
 let credits = 100;
 let betAmount = 10;
 
-// TOTAL TUMBLE WIN
+// WINS
 let tumbleTotalWin = 0;
 let isTumbling = false;
+
+// FREE SPINS
+let freeSpins = 0;
+let inFreeSpins = false;
+let freeSpinTotalWin = 0;
+let waitingForBonusStart = false;
 
 // UI
 let creditsText;
 let resultText;
+let freeSpinsText;
+let bonusText;
 
 let isSpinning = false;
 
+// AUTO SPINS
+let autoSpinsRemaining = 0;
+let autoSpinPaused = false;
+
+let autoSpinText;
+let autoSpinButtons = [];
+let currentBonusMultiplier = 0;
+let multiplierText;
+let activeMultiplierSprites = [];
+
+
 function preload() {
 
-    // LOAD SYMBOL IMAGES
+    // LOAD SYMBOLS
+    this.load.image('apple', 'assets/symbols/apple.png');
+    this.load.image('banana', 'assets/symbols/banana.png');
     this.load.image('cherry', 'assets/symbols/cherry.png');
-    this.load.image('lemon', 'assets/symbols/lemon.png');
-    this.load.image('star', 'assets/symbols/star.png');
-    this.load.image('seven', 'assets/symbols/seven.png');
     this.load.image('diamond', 'assets/symbols/diamond.png');
     this.load.image('grapes', 'assets/symbols/grapes.png');
+    this.load.image('lemon', 'assets/symbols/lemon.png');
+    this.load.image('seven', 'assets/symbols/seven.png');
+    this.load.image('star', 'assets/symbols/star.png');
+    this.load.image('watermelon', 'assets/symbols/watermelon.png');
+
+    // SCATTER
+    this.load.image(
+        'scatter',
+        'assets/symbols/scatter.png'
+    );
+
+this.load.image(
+    'multi2',
+    'assets/symbols/2x.png'
+);
+
+this.load.image(
+    'multi5',
+    'assets/symbols/5x.png'
+);
+
+this.load.image(
+    'multi10',
+    'assets/symbols/10x.png'
+);
+
+}
+
+// WEIGHTED SYMBOLS
+function getRandomSymbol() {
+
+    // VERY RARE SCATTER
+    if (
+        Phaser.Math.Between(1, 100) <= 2
+    ) {
+
+        return "scatter";
+    }
+
+    let weightedSymbols = [
+
+        // LOW SYMBOLS
+        "apple",
+        "apple",
+        "apple",
+        "apple",
+
+        "banana",
+        "banana",
+        "banana",
+        "banana",
+
+        "cherry",
+        "cherry",
+        "cherry",
+        "cherry",
+
+        "lemon",
+        "lemon",
+        "lemon",
+        "lemon",
+
+        // MID SYMBOLS
+        "watermelon",
+        "watermelon",
+        "watermelon",
+
+        "grapes",
+        "grapes",
+        "grapes",
+
+        // HIGH SYMBOLS
+        "star",
+        "star",
+
+        "diamond",
+
+        "seven"
+    ];
+
+    return Phaser.Utils.Array.GetRandom(
+        weightedSymbols
+    );
 }
 
 function create() {
 
-    // TITLE CENTERED
+    this.textures.each(texture => {
+
+    texture.setFilter(
+        Phaser.Textures.FilterMode.LINEAR
+    );
+
+});
+
+    // TITLE
     this.add.text(500, 40, 'MY SLOT MACHINE', {
         fontSize: '40px',
         color: '#ffffff'
     }).setOrigin(0.5);
 
-    // CREDITS BOTTOM LEFT
-    creditsText = this.add.text(20, 650, 'Credits: 100', {
-        fontSize: '28px',
-        color: '#ffff00'
-    });
+    // CREDITS
+    creditsText = this.add.text(
+        20,
+        650,
+        'Credits: 100',
+        {
+            fontSize: '28px',
+            color: '#ffff00'
+        }
+    );
 
-    // RESULT TEXT CENTERED
-    resultText = this.add.text(500, 585, 'READY', {
-        fontSize: '32px',
-        color: '#00ff00'
-    }).setOrigin(0.5);
+    // FREE SPINS
+    freeSpinsText = this.add.text(
+        20,
+        610,
+        '',
+        {
+            fontSize: '28px',
+            color: '#ff66ff'
+        }
+    );
+
+    // RESULT
+    resultText = this.add.text(
+        500,
+        585,
+        'READY',
+        {
+            fontSize: '32px',
+            color: '#00ff00'
+        }
+    ).setOrigin(0.5);
 
     resultText.setDepth(100);
+    multiplierText = this.add.text(
+    500,
+    150,
+    '',
+    {
+        fontSize: '36px',
+        color: '#ff0000',
+        fontStyle: 'bold'
+    }
+)
+.setOrigin(0.5)
+.setDepth(150);
 
-    // CREATE MASK
+    // BONUS POPUP
+    bonusText = this.add.text(
+        500,
+        350,
+        '',
+        {
+            fontSize: '42px',
+            color: '#ffcc00',
+            align: 'center',
+            backgroundColor: '#000000',
+            padding: {
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: 20
+            }
+        }
+    )
+    .setOrigin(0.5)
+    .setDepth(200)
+    .setVisible(false);
+
+    // MASK
     const maskShape = this.make.graphics({});
 
     maskShape.fillStyle(0xffffff);
@@ -120,28 +307,147 @@ function create() {
 
     createGrid(this);
 
-    // SPIN BUTTON CENTERED
-    const spinButton = this.add.text(500, 640, 'SPIN', {
-        fontSize: '32px',
+    // SPIN BUTTON
+    const spinButton = this.add.text(
+    500,
+    640,
+    'SPIN',
+    {
+        fontSize: '24px',
         backgroundColor: '#ff0000',
         color: '#ffffff',
+        align: 'center',
+        fixedWidth: 160,
+        fixedHeight: 58,
         padding: {
-            left: 20,
-            right: 20,
-            top: 10,
-            bottom: 10
+            top: 14
         }
-    }).setOrigin(0.5);
+    }
+)
+.setOrigin(0.5);
 
-    spinButton.setDepth(100);
+spinButton.setDepth(100);
 
-    spinButton.setInteractive();
+spinButton.setInteractive();
 
     spinButton.on('pointerdown', () => {
 
+        if (
+            !waitingForBonusStart &&
+            !inFreeSpins
+        ) {
+
+            spinReels();
+        }
+    });
+
+// AUTO BUTTON
+const autoButton = this.add.text(
+    900,
+    640,
+    'AUTO SPIN',
+    {
+        fontSize: '20px',
+        backgroundColor: '#444444',
+        color: '#ffffff',
+        align: 'center',
+        fixedWidth: 160,
+        fixedHeight: 58,
+        padding: {
+            top: 16
+        }
+    }
+)
+.setOrigin(0.5)
+.setInteractive();
+
+autoButton.setDepth(100);
+
+// AUTO SPIN STATUS
+autoSpinText = this.add.text(
+    500,
+    105,
+    '',
+    {
+        fontSize: '24px',
+        color: '#00ffff'
+    }
+).setOrigin(0.5);
+
+const autoOptions = [
+    25,
+    50,
+    75,
+    100,
+    500,
+    1000
+];
+
+let autoMenu = [];
+
+autoOptions.forEach((amount, index) => {
+
+    let btn = this.add.text(
+    900,
+    580 - (index * 45),
+        amount,
+        {
+            fontSize: '22px',
+            backgroundColor: '#222222',
+            color: '#ffffff',
+            padding: {
+                left: 15,
+                right: 15,
+                top: 8,
+                bottom: 8
+            }
+        }
+    )
+    .setOrigin(0.5)
+    .setInteractive()
+    .setVisible(false);
+
+    btn.setDepth(100);
+
+    btn.on('pointerdown', () => {
+
+        if (
+            isSpinning ||
+            waitingForBonusStart
+        ) {
+            return;
+        }
+
+        autoSpinsRemaining = amount;
+
+        updateAutoSpinText();
+
+        autoMenu.forEach(b => {
+
+            b.setVisible(false);
+
+        });
+
         spinReels();
+    });
+
+    autoMenu.push(btn);
+});
+
+// OPEN/CLOSE AUTO MENU
+autoButton.on('pointerdown', () => {
+
+    let visible =
+        !autoMenu[0].visible;
+
+    autoMenu.forEach(btn => {
+
+        btn.setVisible(visible);
 
     });
+});
+
+
 }
 
 function createGrid(scene) {
@@ -153,10 +459,13 @@ function createGrid(scene) {
 
         for (let col = 0; col < COLS; col++) {
 
-            let x = START_X + (col * SPACING_X);
-            let y = START_Y + (row * SPACING_Y);
+            let x =
+                START_X + (col * SPACING_X);
 
-            // BACKGROUND TILE
+            let y =
+                START_Y + (row * SPACING_Y);
+
+            // BACKGROUND
             let bg = scene.add.rectangle(
                 x,
                 y,
@@ -168,17 +477,17 @@ function createGrid(scene) {
 
             backgrounds[row][col] = bg;
 
-            // RANDOM SYMBOL
-            let randomSymbol = Phaser.Utils.Array.GetRandom(symbols);
+            // SYMBOL
+            let randomSymbol =
+                getRandomSymbol();
 
-            // SYMBOL IMAGE
             let symbol = scene.add.image(
                 x,
                 y,
                 randomSymbol
             );
 
-            symbol.setDisplaySize(65, 65);
+            symbol.setScale(0.06);
 
             symbol.setMask(reelMask);
 
@@ -187,6 +496,21 @@ function createGrid(scene) {
 
             grid[row][col] = symbol;
         }
+    }
+}
+
+function updateAutoSpinText() {
+
+    if (autoSpinsRemaining > 0) {
+
+        autoSpinText.setText(
+            "AUTO SPINS LEFT: " +
+            autoSpinsRemaining
+        );
+    }
+    else {
+
+        autoSpinText.setText('');
     }
 }
 
@@ -201,28 +525,68 @@ function spinReels() {
     tumbleTotalWin = 0;
     isTumbling = true;
 
-    // RESET GRID
+    // CLEAR OLD MULTIPLIERS
+multiplierText.setText('');
+
+activeMultiplierSprites.forEach(
+    sprite => sprite.destroy()
+);
+
+activeMultiplierSprites = [];
+tumbleMultipliers = [];
+
+currentBonusMultiplier = 0;
+
+
+
+    // RESET
     for (let row = 0; row < ROWS; row++) {
 
         for (let col = 0; col < COLS; col++) {
 
-            backgrounds[row][col].setFillStyle(0x333333);
+            backgrounds[row][col]
+                .setFillStyle(0x333333);
 
             if (grid[row][col] !== null) {
 
-                grid[row][col].setVisible(true);
+                grid[row][col]
+                    .setVisible(true);
 
-                grid[row][col].y = grid[row][col].originalY;
+                grid[row][col].y =
+                    grid[row][col].originalY;
             }
         }
     }
 
-    // REMOVE BET
+    // NORMAL SPIN
+    if (!inFreeSpins) {
+
     credits -= betAmount;
 
-    creditsText.setText("Credits: " + credits);
+    // AUTO SPINS
+    if (autoSpinsRemaining > 0) {
 
-    resultText.setText("SPINNING...");
+        autoSpinsRemaining--;
+
+        updateAutoSpinText();
+    }
+}
+    else {
+
+        freeSpins--;
+
+        freeSpinsText.setText(
+            "FREE SPINS: " + freeSpins
+        );
+    }
+
+    creditsText.setText(
+        "Credits: " + credits
+    );
+
+    resultText.setText(
+        "SPINNING..."
+    );
 
     // SPIN EFFECT
     let spinInterval = setInterval(() => {
@@ -233,12 +597,15 @@ function spinReels() {
 
                 if (grid[row][col] !== null) {
 
-                    let symbol = grid[row][col];
+                    let symbol =
+                        grid[row][col];
 
                     let randomSymbol =
-                        Phaser.Utils.Array.GetRandom(symbols);
+                        getRandomSymbol();
 
-                    symbol.setTexture(randomSymbol);
+                    symbol.setTexture(
+                        randomSymbol
+                    );
 
                     symbol.y =
                         symbol.originalY +
@@ -260,14 +627,18 @@ function spinReels() {
 
                 if (grid[row][col] !== null) {
 
-                    let symbol = grid[row][col];
+                    let symbol =
+                        grid[row][col];
 
                     let finalSymbol =
-                        Phaser.Utils.Array.GetRandom(symbols);
+                        getRandomSymbol();
 
-                    symbol.setTexture(finalSymbol);
+                    symbol.setTexture(
+                        finalSymbol
+                    );
 
-                    symbol.y = symbol.originalY;
+                    symbol.y =
+                        symbol.originalY;
                 }
             }
         }
@@ -279,13 +650,136 @@ function spinReels() {
     }, 2000);
 }
 
+function rollBonusMultiplier() {
+    console.log("MULTIPLIER SPAWNED");
+
+    
+
+    // ALWAYS SPAWN FOR TESTING
+
+    let multipliers = [
+
+        {
+            value: 2,
+            key: 'multi2'
+        },
+
+        {
+            value: 5,
+            key: 'multi5'
+        },
+
+        {
+            value: 10,
+            key: 'multi10'
+        }
+    ];
+
+    let picked =
+        Phaser.Utils.Array.GetRandom(
+            multipliers
+        );
+
+    
+
+    
+
+    let sprite =
+    game.scene.scenes[0]
+    .add.image(
+        0,
+        -120,
+        picked.key
+    );
+
+    sprite.setScale(0.06);
+    sprite.setMask(reelMask);
+
+    sprite.setDepth(300);
+
+    activeMultiplierSprites.push(
+        sprite
+    );
+
+    
+
+    // RANDOM GRID POSITION
+// FIND EMPTY POSITIONS
+let emptyPositions = [];
+
+for (let row = 0; row < ROWS; row++) {
+
+    for (let col = 0; col < COLS; col++) {
+
+        if (grid[row][col] === null) {
+
+            emptyPositions.push({
+                row: row,
+                col: col
+            });
+        }
+    }
+}
+
+// NO EMPTY SPACES
+if (emptyPositions.length <= 0) {
+    return;
+}
+
+// PICK RANDOM EMPTY SPACE
+let pickedPos =
+    Phaser.Utils.Array.GetRandom(
+        emptyPositions
+    );
+
+    tumbleMultipliers.push({
+
+    value: picked.value,
+
+    sprite: sprite,
+
+    row: pickedPos.row,
+
+    col: pickedPos.col
+});
+
+let x =
+    START_X +
+    (pickedPos.col * SPACING_X);
+
+let targetY =
+    START_Y +
+    (pickedPos.row * SPACING_Y);
+
+// MOVE SPRITE TO START POSITION
+sprite.x = x;
+
+// DROP ANIMATION
+game.scene.scenes[0]
+.tweens.add({
+
+    targets: sprite,
+
+    y: targetY,
+
+    duration: 700,
+
+    ease: 'Bounce.easeOut'
+});
+
+    // TEXT
+    multiplierText.setText(
+        picked.value + "x"
+    );
+}
+
 function checkWin() {
 
     let counts = {};
 
     let winningPositions = [];
 
-    // RESET TILE COLORS
+    // RESET COLORS
     for (let row = 0; row < ROWS; row++) {
 
         for (let col = 0; col < COLS; col++) {
@@ -295,15 +789,19 @@ function checkWin() {
         }
     }
 
-    // COUNT SYMBOLS
+    // COUNT
     for (let row = 0; row < ROWS; row++) {
 
         for (let col = 0; col < COLS; col++) {
 
-            if (grid[row][col] !== null) {
+          if (
+    grid[row][col] !== null
+)
+{
 
                 let symbolKey =
-                    grid[row][col].texture.key;
+                    grid[row][col]
+                    .texture.key;
 
                 if (!counts[symbolKey]) {
 
@@ -315,11 +813,88 @@ function checkWin() {
         }
     }
 
+    // SCATTERS
+    let scatterCount =
+        counts["scatter"] || 0;
+
+    // BONUS TRIGGER
+    if (
+        scatterCount >= 3 &&
+        !inFreeSpins &&
+        !waitingForBonusStart
+    ) {
+
+        waitingForBonusStart = true;
+        autoSpinPaused = true;
+
+        freeSpins = 10;
+
+        freeSpinTotalWin = 0;
+
+        bonusText.setText(
+            "FREE SPINS WON!\n10 FREE SPINS\n\nCLICK TO CONTINUE"
+        );
+
+        bonusText.setVisible(true);
+
+        bonusText.setInteractive();
+
+        bonusText.once('pointerdown', () => {
+
+            bonusText.setVisible(false);
+
+            waitingForBonusStart = false;
+
+            inFreeSpins = true;
+
+            freeSpinsText.setText(
+                "FREE SPINS: " + freeSpins
+            );
+
+            // AUTO START BONUS
+            setTimeout(() => {
+
+                spinReels();
+
+            }, 1000);
+        });
+    }
+
+    // RETRIGGER
+    if (
+        scatterCount >= 3 &&
+        inFreeSpins
+    ) {
+
+        freeSpins += 5;
+
+        freeSpinsText.setText(
+            "FREE SPINS: " + freeSpins
+        );
+
+        bonusText.setText(
+            "+5 FREE SPINS!"
+        );
+
+        bonusText.setVisible(true);
+
+        setTimeout(() => {
+
+            bonusText.setVisible(false);
+
+        }, 2000);
+    }
+
     let totalWin = 0;
 
     // CHECK WINS
     for (let symbol in counts) {
 
+        if (symbol === "scatter") {
+            continue;
+        }
+
+        // SWEET BONANZA STYLE
         if (counts[symbol] >= 8) {
 
             let winAmount =
@@ -328,15 +903,17 @@ function checkWin() {
 
             totalWin += winAmount;
 
-            // STORE WINNING POSITIONS
+            // HIGHLIGHT
             for (let row = 0; row < ROWS; row++) {
 
                 for (let col = 0; col < COLS; col++) {
 
                     if (
-                        grid[row][col] !== null &&
-                        grid[row][col].texture.key === symbol
-                    ) {
+    grid[row][col] !== null &&
+    grid[row][col]
+    .texture.key === symbol
+)
+                    {
 
                         backgrounds[row][col]
                             .setFillStyle(0xffff00);
@@ -353,16 +930,27 @@ function checkWin() {
 
     // WIN
     if (totalWin > 0) {
+        // BONUS MULTIPLIERS
+
 
         tumbleTotalWin += totalWin;
+
+        if (inFreeSpins) {
+
+            freeSpinTotalWin += totalWin;
+        }
 
         resultText.setText(
             "TOTAL WIN " + tumbleTotalWin
         );
 
+
+
         setTimeout(() => {
 
-            removeWinningSymbols(winningPositions);
+            removeWinningSymbols(
+                winningPositions
+            );
 
         }, 800);
     }
@@ -370,28 +958,183 @@ function checkWin() {
 
         if (isTumbling) {
 
-            credits += tumbleTotalWin;
+            // NORMAL PAYOUT
+            if (!inFreeSpins) {
 
-            creditsText.setText(
-                "Credits: " + credits
-            );
+                credits += tumbleTotalWin;
 
-            resultText.setText(
-                "PAID " + tumbleTotalWin
-            );
+                creditsText.setText(
+                    "Credits: " + credits
+                );
 
-            isTumbling = false;
+                resultText.setText(
+                    "PAID " + tumbleTotalWin
+                );
+            }
+            else {
+
+                resultText.setText(
+                    "BONUS WIN " +
+                    freeSpinTotalWin
+                );
+            }
+
+            // APPLY BONUS MULTIPLIERS
+if (
+    inFreeSpins &&
+    tumbleMultipliers.length > 0
+) {
+
+    let totalMultiplier = 0;
+
+    tumbleMultipliers.forEach(m => {
+
+        totalMultiplier += m.value;
+
+    });
+
+    let bonusWin =
+        tumbleTotalWin *
+        totalMultiplier;
+
+    tumbleTotalWin += bonusWin;
+
+    freeSpinTotalWin += bonusWin;
+
+    multiplierText.setText(
+        totalMultiplier + "x"
+    );
+
+    resultText.setText(
+        "TOTAL WIN " +
+        tumbleTotalWin
+    );
+}
+
+isTumbling = false;
+
+setTimeout(() => {
+
+    multiplierText.setText('');
+
+}, 1200);
+
+
+
+
+            // BONUS COMPLETE
+            if (
+                inFreeSpins &&
+                freeSpins <= 0
+            ) {
+
+                
+
+                freeSpinsText.setText('');
+
+                setTimeout(() => {
+
+                    bonusText.setText(
+                        "BONUS COMPLETE!\n\nTOTAL WIN\n" +
+                        freeSpinTotalWin +
+                        "\n\nCLICK TO COLLECT"
+                    );
+
+                    bonusText.setVisible(true);
+
+                    bonusText.setInteractive();
+
+                    bonusText.once(
+    'pointerdown',
+    () => {
+
+    credits +=
+        freeSpinTotalWin;
+
+    creditsText.setText(
+        "Credits: " + credits
+    );
+
+    bonusText.setVisible(
+        false
+    );
+
+    freeSpinTotalWin = 0;
+
+    resultText.setText(
+        "READY"
+    );
+
+    // RESET BONUS STATE
+    inFreeSpins = false;
+
+    autoSpinPaused = false;
+
+    // RESUME AUTO SPINS
+    if (autoSpinsRemaining > 0) {
+
+        setTimeout(() => {
+
+            spinReels();
+
+        }, 1000);
+    }
+});
+
+                }, 1500);
+
+                return;
+            }
+
+            // AUTO BONUS SPINS
+            if (
+                inFreeSpins &&
+                freeSpins > 0
+            ) {
+
+                setTimeout(() => {
+
+                    spinReels();
+
+                }, 1500);
+            }
         }
+
+// CONTINUE AUTO SPINS
+if (
+    !inFreeSpins &&
+    !waitingForBonusStart &&
+    !autoSpinPaused &&
+    autoSpinsRemaining > 0
+)
+
+{
+
+    setTimeout(() => {
+
+        spinReels();
+
+    }, 1500);
+}
+
     }
 }
 
-function removeWinningSymbols(winningPositions) {
+function removeWinningSymbols(
+    winningPositions
+) {
 
-    for (let i = 0; i < winningPositions.length; i++) {
+    for (
+        let i = 0;
+        i < winningPositions.length;
+        i++
+    ) {
 
-        let pos = winningPositions[i];
+        let pos =
+            winningPositions[i];
 
-        let symbol = grid[pos.row][pos.col];
+        let symbol =
+            grid[pos.row][pos.col];
 
         symbol.setVisible(false);
 
@@ -405,62 +1148,84 @@ function removeWinningSymbols(winningPositions) {
         "TOTAL WIN " + tumbleTotalWin
     );
 
-    setTimeout(() => {
+    // BONUS MULTIPLIERS
+if (inFreeSpins) {
 
-        dropSymbols();
-
-    }, 500);
+    rollBonusMultiplier();
 }
 
+setTimeout(() => {
+
+    dropSymbols();
+
+}, 500);
+}
 function dropSymbols() {
 
     for (let col = 0; col < COLS; col++) {
 
         let symbolKeys = [];
 
-        for (let row = ROWS - 1; row >= 0; row--) {
+        for (
+            let row = ROWS - 1;
+            row >= 0;
+            row--
+        ) {
 
-            if (grid[row][col] !== null) {
+            if (
+    grid[row][col] !== null
+) {
 
-                symbolKeys.push(
-                    grid[row][col].texture.key
-                );
+    symbolKeys.push(
+        grid[row][col]
+        .texture.key
+    );
 
-                grid[row][col].destroy();
+    grid[row][col].destroy();
 
-                grid[row][col] = null;
-            }
+    grid[row][col] = null;
+}
         }
 
         let currentRow = ROWS - 1;
 
-        for (let i = 0; i < symbolKeys.length; i++) {
+        for (
+            let i = 0;
+            i < symbolKeys.length;
+            i++
+        ) {
 
             let x =
-                START_X + (col * SPACING_X);
+                START_X +
+                (col * SPACING_X);
 
             let targetY =
-                START_Y + (currentRow * SPACING_Y);
+                START_Y +
+                (currentRow * SPACING_Y);
 
-            let startY = targetY - 120;
+            let startY =
+                targetY - 120;
 
             let symbol =
-                game.scene.scenes[0].add.image(
+                game.scene.scenes[0]
+                .add.image(
                     x,
                     startY,
                     symbolKeys[i]
                 );
 
-            symbol.setDisplaySize(65, 65);
+            symbol.setScale(0.06);
 
             symbol.setMask(reelMask);
 
             symbol.originalX = x;
             symbol.originalY = targetY;
 
-            grid[currentRow][col] = symbol;
+            grid[currentRow][col] =
+                symbol;
 
-            game.scene.scenes[0].tweens.add({
+            game.scene.scenes[0]
+            .tweens.add({
                 targets: symbol,
                 y: targetY,
                 duration: 300
@@ -470,11 +1235,14 @@ function dropSymbols() {
         }
     }
 
-    setTimeout(() => {
 
-        spawnNewSymbols();
 
-    }, 350);
+
+setTimeout(() => {
+
+    spawnNewSymbols();
+
+}, 350);
 }
 
 function spawnNewSymbols() {
@@ -483,36 +1251,55 @@ function spawnNewSymbols() {
 
         for (let row = 0; row < ROWS; row++) {
 
-            if (grid[row][col] === null) {
+            
+
+            let hasMultiplier =
+    tumbleMultipliers.some(
+        multi =>
+            multi.row === row &&
+            multi.col === col
+    );
+
+if (
+    grid[row][col] === null &&
+    !hasMultiplier
+)
+            {
 
                 let x =
-                    START_X + (col * SPACING_X);
+                    START_X +
+                    (col * SPACING_X);
 
                 let finalY =
-                    START_Y + (row * SPACING_Y);
+                    START_Y +
+                    (row * SPACING_Y);
 
-                let startY = finalY - 300;
+                let startY =
+                    finalY - 300;
 
                 let randomSymbol =
-                    Phaser.Utils.Array.GetRandom(symbols);
+                    getRandomSymbol();
 
                 let symbol =
-                    game.scene.scenes[0].add.image(
+                    game.scene.scenes[0]
+                    .add.image(
                         x,
                         startY,
                         randomSymbol
                     );
 
-                symbol.setDisplaySize(65, 65);
+                symbol.setScale(0.06);
 
                 symbol.setMask(reelMask);
 
                 symbol.originalX = x;
                 symbol.originalY = finalY;
 
-                grid[row][col] = symbol;
+                grid[row][col] =
+                    symbol;
 
-                game.scene.scenes[0].tweens.add({
+                game.scene.scenes[0]
+                .tweens.add({
                     targets: symbol,
                     y: finalY,
                     duration: 400
