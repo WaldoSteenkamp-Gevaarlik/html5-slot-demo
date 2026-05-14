@@ -101,14 +101,7 @@ let isSpinning = false;
 // AUTO SPINS
 let autoSpinsRemaining = 0;
 let autoSpinPaused = false;
-if (autoSpinsRemaining > 0) {
 
-    setTimeout(() => {
-
-        spinReels();
-
-    }, 1000);
-}
 let autoSpinText;
 let autoSpinButtons = [];
 
@@ -813,7 +806,7 @@ function checkWin() {
                 freeSpins <= 0
             ) {
 
-                inFreeSpins = false;
+                
 
                 freeSpinsText.setText('');
 
@@ -830,26 +823,41 @@ function checkWin() {
                     bonusText.setInteractive();
 
                     bonusText.once(
-                        'pointerdown',
-                        () => {
+    'pointerdown',
+    () => {
 
-                        credits +=
-                            freeSpinTotalWin;
+    credits +=
+        freeSpinTotalWin;
 
-                        creditsText.setText(
-                            "Credits: " + credits
-                        );
+    creditsText.setText(
+        "Credits: " + credits
+    );
 
-                        bonusText.setVisible(
-                            false
-                        );
+    bonusText.setVisible(
+        false
+    );
 
-                        freeSpinTotalWin = 0;
+    freeSpinTotalWin = 0;
 
-                        resultText.setText(
-                            "READY"
-                        );
-                    });
+    resultText.setText(
+        "READY"
+    );
+
+    // RESET BONUS STATE
+    inFreeSpins = false;
+
+    autoSpinPaused = false;
+
+    // RESUME AUTO SPINS
+    if (autoSpinsRemaining > 0) {
+
+        setTimeout(() => {
+
+            spinReels();
+
+        }, 1000);
+    }
+});
 
                 }, 1500);
 
