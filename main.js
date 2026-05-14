@@ -41,6 +41,8 @@ let symbols = [
     "scatter"
 ];
 
+let tumbleMultipliers = [];
+
 // SYMBOL VALUES
 let symbolValues = {
 
@@ -73,6 +75,8 @@ const SPACING_Y = 80;
 let grid = [];
 let backgrounds = [];
 
+
+
 // MASK
 let reelMask;
 
@@ -104,6 +108,10 @@ let autoSpinPaused = false;
 
 let autoSpinText;
 let autoSpinButtons = [];
+let currentBonusMultiplier = 0;
+let multiplierText;
+let activeMultiplierSprites = [];
+
 
 function preload() {
 
@@ -123,6 +131,22 @@ function preload() {
         'scatter',
         'assets/symbols/scatter.png'
     );
+
+this.load.image(
+    'multi2',
+    'assets/symbols/2x.png'
+);
+
+this.load.image(
+    'multi5',
+    'assets/symbols/5x.png'
+);
+
+this.load.image(
+    'multi10',
+    'assets/symbols/10x.png'
+);
+
 }
 
 // WEIGHTED SYMBOLS
@@ -232,6 +256,18 @@ function create() {
     ).setOrigin(0.5);
 
     resultText.setDepth(100);
+    multiplierText = this.add.text(
+    500,
+    150,
+    '',
+    {
+        fontSize: '36px',
+        color: '#ff0000',
+        fontStyle: 'bold'
+    }
+)
+.setOrigin(0.5)
+.setDepth(150);
 
     // BONUS POPUP
     bonusText = this.add.text(
@@ -489,6 +525,20 @@ function spinReels() {
     tumbleTotalWin = 0;
     isTumbling = true;
 
+    // CLEAR OLD MULTIPLIERS
+multiplierText.setText('');
+
+activeMultiplierSprites.forEach(
+    sprite => sprite.destroy()
+);
+
+activeMultiplierSprites = [];
+tumbleMultipliers = [];
+
+currentBonusMultiplier = 0;
+
+
+
     // RESET
     for (let row = 0; row < ROWS; row++) {
 
@@ -600,6 +650,129 @@ function spinReels() {
     }, 2000);
 }
 
+function rollBonusMultiplier() {
+    console.log("MULTIPLIER SPAWNED");
+
+    
+
+    // ALWAYS SPAWN FOR TESTING
+
+    let multipliers = [
+
+        {
+            value: 2,
+            key: 'multi2'
+        },
+
+        {
+            value: 5,
+            key: 'multi5'
+        },
+
+        {
+            value: 10,
+            key: 'multi10'
+        }
+    ];
+
+    let picked =
+        Phaser.Utils.Array.GetRandom(
+            multipliers
+        );
+
+    
+
+    
+
+    let sprite =
+    game.scene.scenes[0]
+    .add.image(
+        0,
+        -120,
+        picked.key
+    );
+
+    sprite.setScale(0.06);
+    sprite.setMask(reelMask);
+
+    sprite.setDepth(300);
+
+    activeMultiplierSprites.push(
+        sprite
+    );
+
+    
+
+    // RANDOM GRID POSITION
+// FIND EMPTY POSITIONS
+let emptyPositions = [];
+
+for (let row = 0; row < ROWS; row++) {
+
+    for (let col = 0; col < COLS; col++) {
+
+        if (grid[row][col] === null) {
+
+            emptyPositions.push({
+                row: row,
+                col: col
+            });
+        }
+    }
+}
+
+// NO EMPTY SPACES
+if (emptyPositions.length <= 0) {
+    return;
+}
+
+// PICK RANDOM EMPTY SPACE
+let pickedPos =
+    Phaser.Utils.Array.GetRandom(
+        emptyPositions
+    );
+
+    tumbleMultipliers.push({
+
+    value: picked.value,
+
+    sprite: sprite,
+
+    row: pickedPos.row,
+
+    col: pickedPos.col
+});
+
+let x =
+    START_X +
+    (pickedPos.col * SPACING_X);
+
+let targetY =
+    START_Y +
+    (pickedPos.row * SPACING_Y);
+
+// MOVE SPRITE TO START POSITION
+sprite.x = x;
+
+// DROP ANIMATION
+game.scene.scenes[0]
+.tweens.add({
+
+    targets: sprite,
+
+    y: targetY,
+
+    duration: 700,
+
+    ease: 'Bounce.easeOut'
+});
+
+    // TEXT
+    multiplierText.setText(
+        picked.value + "x"
+    );
+}
+
 function checkWin() {
 
     let counts = {};
@@ -621,7 +794,10 @@ function checkWin() {
 
         for (let col = 0; col < COLS; col++) {
 
-            if (grid[row][col] !== null) {
+          if (
+    grid[row][col] !== null
+)
+{
 
                 let symbolKey =
                     grid[row][col]
@@ -733,10 +909,11 @@ function checkWin() {
                 for (let col = 0; col < COLS; col++) {
 
                     if (
-                        grid[row][col] !== null &&
-                        grid[row][col]
-                        .texture.key === symbol
-                    ) {
+    grid[row][col] !== null &&
+    grid[row][col]
+    .texture.key === symbol
+)
+                    {
 
                         backgrounds[row][col]
                             .setFillStyle(0xffff00);
@@ -753,6 +930,8 @@ function checkWin() {
 
     // WIN
     if (totalWin > 0) {
+        // BONUS MULTIPLIERS
+
 
         tumbleTotalWin += totalWin;
 
@@ -764,6 +943,8 @@ function checkWin() {
         resultText.setText(
             "TOTAL WIN " + tumbleTotalWin
         );
+
+
 
         setTimeout(() => {
 
@@ -798,7 +979,48 @@ function checkWin() {
                 );
             }
 
-            isTumbling = false;
+            // APPLY BONUS MULTIPLIERS
+if (
+    inFreeSpins &&
+    tumbleMultipliers.length > 0
+) {
+
+    let totalMultiplier = 0;
+
+    tumbleMultipliers.forEach(m => {
+
+        totalMultiplier += m.value;
+
+    });
+
+    let bonusWin =
+        tumbleTotalWin *
+        totalMultiplier;
+
+    tumbleTotalWin += bonusWin;
+
+    freeSpinTotalWin += bonusWin;
+
+    multiplierText.setText(
+        totalMultiplier + "x"
+    );
+
+    resultText.setText(
+        "TOTAL WIN " +
+        tumbleTotalWin
+    );
+}
+
+isTumbling = false;
+
+setTimeout(() => {
+
+    multiplierText.setText('');
+
+}, 1200);
+
+
+
 
             // BONUS COMPLETE
             if (
@@ -926,13 +1148,18 @@ function removeWinningSymbols(
         "TOTAL WIN " + tumbleTotalWin
     );
 
-    setTimeout(() => {
+    // BONUS MULTIPLIERS
+if (inFreeSpins) {
 
-        dropSymbols();
-
-    }, 500);
+    rollBonusMultiplier();
 }
 
+setTimeout(() => {
+
+    dropSymbols();
+
+}, 500);
+}
 function dropSymbols() {
 
     for (let col = 0; col < COLS; col++) {
@@ -945,17 +1172,19 @@ function dropSymbols() {
             row--
         ) {
 
-            if (grid[row][col] !== null) {
+            if (
+    grid[row][col] !== null
+) {
 
-                symbolKeys.push(
-                    grid[row][col]
-                    .texture.key
-                );
+    symbolKeys.push(
+        grid[row][col]
+        .texture.key
+    );
 
-                grid[row][col].destroy();
+    grid[row][col].destroy();
 
-                grid[row][col] = null;
-            }
+    grid[row][col] = null;
+}
         }
 
         let currentRow = ROWS - 1;
@@ -1006,11 +1235,14 @@ function dropSymbols() {
         }
     }
 
-    setTimeout(() => {
 
-        spawnNewSymbols();
 
-    }, 350);
+
+setTimeout(() => {
+
+    spawnNewSymbols();
+
+}, 350);
 }
 
 function spawnNewSymbols() {
@@ -1019,7 +1251,20 @@ function spawnNewSymbols() {
 
         for (let row = 0; row < ROWS; row++) {
 
-            if (grid[row][col] === null) {
+            
+
+            let hasMultiplier =
+    tumbleMultipliers.some(
+        multi =>
+            multi.row === row &&
+            multi.col === col
+    );
+
+if (
+    grid[row][col] === null &&
+    !hasMultiplier
+)
+            {
 
                 let x =
                     START_X +
