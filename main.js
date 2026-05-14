@@ -100,6 +100,15 @@ let isSpinning = false;
 
 // AUTO SPINS
 let autoSpinsRemaining = 0;
+let autoSpinPaused = false;
+if (autoSpinsRemaining > 0) {
+
+    setTimeout(() => {
+
+        spinReels();
+
+    }, 1000);
+}
 let autoSpinText;
 let autoSpinButtons = [];
 
@@ -647,6 +656,7 @@ function checkWin() {
     ) {
 
         waitingForBonusStart = true;
+        autoSpinPaused = true;
 
         freeSpins = 10;
 
@@ -863,8 +873,12 @@ function checkWin() {
 // CONTINUE AUTO SPINS
 if (
     !inFreeSpins &&
+    !waitingForBonusStart &&
+    !autoSpinPaused &&
     autoSpinsRemaining > 0
-) {
+)
+
+{
 
     setTimeout(() => {
 
