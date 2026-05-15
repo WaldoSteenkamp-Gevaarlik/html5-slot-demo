@@ -42,6 +42,8 @@ let symbols = [
 ];
 
 let tumbleMultipliers = [];
+let finalSpinBoard = [];
+let stoppedColumns = [];
 
 // SYMBOL VALUES
 let symbolValues = {
@@ -99,6 +101,8 @@ let creditsText;
 let resultText;
 let freeSpinsText;
 let bonusText;
+let bigWinText;
+let betText;
 
 let isSpinning = false;
 
@@ -111,9 +115,15 @@ let autoSpinButtons = [];
 let currentBonusMultiplier = 0;
 let multiplierText;
 let activeMultiplierSprites = [];
+const BONUS_BUY_COST = 100;
 
 
 function preload() {
+
+    this.load.image(
+    'bg',
+    'assets/backgrounds/bg.png'
+);
 
     // LOAD SYMBOLS
     this.load.image('apple', 'assets/symbols/apple.png');
@@ -208,6 +218,20 @@ function getRandomSymbol() {
 
 function create() {
 
+    // BACKGROUND
+let bg = this.add.image(
+    500,
+    350,
+    'bg'
+);
+
+bg.setDisplaySize(
+    1000,
+    700
+);
+
+bg.setDepth(-100);
+
     this.textures.each(texture => {
 
     texture.setFilter(
@@ -223,15 +247,86 @@ function create() {
     }).setOrigin(0.5);
 
     // CREDITS
-    creditsText = this.add.text(
-        20,
-        650,
-        'Credits: 100',
-        {
-            fontSize: '28px',
-            color: '#ffff00'
-        }
+creditsText = this.add.text(
+    20,
+    650,
+    'Credits: 100',
+    {
+        fontSize: '28px',
+        color: '#ffff00'
+    }
+);
+
+// BET TEXT
+betText = this.add.text(
+    640,
+    620,
+    'Bet: ' + betAmount,
+    {
+        fontSize: '28px',
+        color: '#ffffff'
+    }
+);
+
+// BET DOWN BUTTON
+const betDownButton = this.add.text(
+    590,
+    620,
+    '-',
+    {
+        fontSize: '32px',
+        backgroundColor: '#000000',
+        color: '#ffffff',
+        fixedWidth: 40,
+        fixedHeight: 40,
+        align: 'center'
+    }
+)
+.setInteractive();
+
+betDownButton.on('pointerdown', () => {
+
+    if (isSpinning) return;
+
+    betAmount = Math.max(
+        1,
+        betAmount - 1
     );
+
+    betText.setText(
+        'Bet: ' + betAmount
+    );
+});
+
+// BET UP BUTTON
+const betUpButton = this.add.text(
+    770,
+    620,
+    '+',
+    {
+        fontSize: '32px',
+        backgroundColor: '#444444',
+        color: '#ffffff',
+        fixedWidth: 40,
+        fixedHeight: 40,
+        align: 'center'
+    }
+)
+.setInteractive();
+
+betUpButton.on('pointerdown', () => {
+
+    if (isSpinning) return;
+
+    betAmount += 1;
+
+    betText.setText(
+        'Bet: ' + betAmount
+    );
+});
+
+
+   
 
     // FREE SPINS
     freeSpinsText = this.add.text(
@@ -291,6 +386,24 @@ function create() {
     .setDepth(200)
     .setVisible(false);
 
+// BIG WIN TEXT
+bigWinText = this.add.text(
+    500,
+    300,
+    '',
+    {
+        fontSize: '72px',
+        color: '#ffd700',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 10,
+        align: 'center'
+    }
+)
+.setOrigin(0.5)
+.setDepth(500)
+.setVisible(false);
+    
     // MASK
     const maskShape = this.make.graphics({});
 
@@ -434,6 +547,58 @@ autoOptions.forEach((amount, index) => {
     autoMenu.push(btn);
 });
 
+// BUY BONUS BUTTON
+const buyBonusButton = this.add.text(
+    90,
+    420,
+    'BUY\nBONUS',
+    {
+        fontSize: '28px',
+        backgroundColor: '#9900ff',
+        color: '#ffffff',
+        align: 'center',
+        fixedWidth: 160,
+        fixedHeight: 120,
+        padding: {
+            top: 18
+        }
+    }
+)
+.setOrigin(0.5)
+.setInteractive();
+
+buyBonusButton.setDepth(100);
+
+buyBonusButton.on('pointerdown', () => {
+
+    if (
+        isSpinning ||
+        inFreeSpins ||
+        waitingForBonusStart
+    ) {
+        return;
+    }
+
+    // NOT ENOUGH CREDITS
+    if (credits < BONUS_BUY_COST) {
+
+        resultText.setText(
+            "NOT ENOUGH CREDITS"
+        );
+
+        return;
+    }
+
+    // PAY
+    credits -= BONUS_BUY_COST;
+
+    creditsText.setText(
+        "Credits: " + credits
+    );
+
+    buyBonusRound();
+});
+
 // OPEN/CLOSE AUTO MENU
 autoButton.on('pointerdown', () => {
 
@@ -528,16 +693,91 @@ function spinReels() {
     // CLEAR OLD MULTIPLIERS
 multiplierText.setText('');
 
+// REMOVE MULTIPLIER SPRITES
 activeMultiplierSprites.forEach(
     sprite => sprite.destroy()
 );
 
 activeMultiplierSprites = [];
+
+// CLEAR MULTIPLIER POSITIONS
+tumbleMultipliers.forEach(multi => {
+
+    // SAFETY CHECK
+    if (
+        grid[multi.row][multi.col] === null
+    ) {
+
+        let x =
+            START_X +
+            (multi.col * SPACING_X);
+
+        let y =
+            START_Y +
+            (multi.row * SPACING_Y);
+
+        let randomSymbol =
+            getRandomSymbol();
+
+        let symbol =
+            game.scene.scenes[0]
+            .add.image(
+                x,
+                y,
+                randomSymbol
+            );
+
+        symbol.setScale(0.06);
+
+        symbol.setMask(reelMask);
+
+        symbol.originalX = x;
+        symbol.originalY = y;
+
+        grid[multi.row][multi.col] =
+            symbol;
+    }
+});
+
 tumbleMultipliers = [];
 
 currentBonusMultiplier = 0;
 
+// REBUILD EMPTY GRID SPACES
+for (let row = 0; row < ROWS; row++) {
 
+    for (let col = 0; col < COLS; col++) {
+
+        if (grid[row][col] === null) {
+
+            let x =
+                START_X + (col * SPACING_X);
+
+            let y =
+                START_Y + (row * SPACING_Y);
+
+            let randomSymbol =
+                getRandomSymbol();
+
+            let symbol =
+                game.scene.scenes[0]
+                .add.image(
+                    x,
+                    y,
+                    randomSymbol
+                );
+
+            symbol.setScale(0.06);
+
+            symbol.setMask(reelMask);
+
+            symbol.originalX = x;
+            symbol.originalY = y;
+
+            grid[row][col] = symbol;
+        }
+    }
+}
 
     // RESET
     for (let row = 0; row < ROWS; row++) {
@@ -588,6 +828,247 @@ currentBonusMultiplier = 0;
         "SPINNING..."
     );
 
+// PREGENERATE FINAL BOARD
+finalSpinBoard = [];
+
+for (let row = 0; row < ROWS; row++) {
+
+    finalSpinBoard[row] = [];
+
+    for (let col = 0; col < COLS; col++) {
+
+        finalSpinBoard[row][col] =
+            getRandomSymbol();
+    }
+}
+
+
+stoppedColumns = [];
+
+    // SPIN EFFECT
+    let spinInterval = setInterval(() => {
+
+    for (let col = 0; col < COLS; col++) {
+
+        for (let row = 0; row < ROWS; row++) {
+
+            if (grid[row][col] !== null) {
+
+                let symbol =
+                    grid[row][col];
+
+                // FAST SYMBOL CYCLING
+                if (
+    spinInterval !== null &&
+    !stoppedColumns.includes(col)
+) {
+
+    symbol.setTexture(
+        getRandomSymbol()
+    );
+}
+
+                if (!stoppedColumns.includes(col)) {
+
+    symbol.y =
+        symbol.originalY +
+        Phaser.Math.Between(-8, 8);
+
+} else {
+
+    symbol.y = symbol.originalY;
+}
+
+                if (!stoppedColumns.includes(col)) {
+
+    symbol.setScale(
+        0.058,
+        0.068
+    );
+
+} else {
+
+    symbol.setScale(0.06);
+}
+            }
+        }
+    }
+
+}, 45);
+
+    // STOP SPIN
+    setTimeout(() => {
+
+        clearInterval(spinInterval);
+        // STOP ALL SYMBOL RANDOMIZING
+spinInterval = null;
+
+// APPLY FINAL BOARD IMMEDIATELY
+for (let row = 0; row < ROWS; row++) {
+
+    for (let col = 0; col < COLS; col++) {
+
+        if (grid[row][col] !== null) {
+
+            grid[row][col].setTexture(
+                finalSpinBoard[row][col]
+            );
+
+            grid[row][col].y =
+                grid[row][col].originalY;
+
+            grid[row][col].setScale(0.06);
+        }
+    }
+}
+
+        for (let col = 0; col < COLS; col++) {
+
+    setTimeout(() => {
+
+        stoppedColumns.push(col);
+
+        for (let row = 0; row < ROWS; row++) {
+
+            if (grid[row][col] !== null) {
+
+                let symbol =
+                    grid[row][col];
+
+                // BONUS MULTIPLIER CHANCE
+                let shouldSpawnMultiplier =
+                    inFreeSpins &&
+                    Phaser.Math.Between(1, 100) <= 12;
+
+                if (shouldSpawnMultiplier) {
+
+                    let multipliers = [
+
+                        {
+                            value: 2,
+                            key: 'multi2'
+                        },
+
+                        {
+                            value: 5,
+                            key: 'multi5'
+                        },
+
+                        {
+                            value: 10,
+                            key: 'multi10'
+                        }
+                    ];
+
+                    let picked =
+                        Phaser.Utils.Array.GetRandom(
+                            multipliers
+                        );
+
+                    symbol.setVisible(false);
+                    // RESET SCALE
+symbol.setScale(0.06);
+
+                    let multiSprite =
+                        game.scene.scenes[0]
+                        .add.image(
+                            symbol.x,
+                            symbol.y - 200,
+                            picked.key
+                        );
+
+                    multiSprite.setScale(0.06);
+
+                    multiSprite.setMask(reelMask);
+
+                    multiSprite.setDepth(5);
+
+                    activeMultiplierSprites.push(
+                        multiSprite
+                    );
+
+                    tumbleMultipliers.push({
+
+                        value: picked.value,
+
+                        sprite: multiSprite,
+
+                        row: row,
+
+                        col: col
+                    });
+
+                    game.scene.scenes[0]
+                    .tweens.add({
+
+                        targets: multiSprite,
+
+                        y: symbol.y,
+
+                        duration: 500,
+
+                        ease: 'Bounce.easeOut'
+                    });
+                }
+                else {
+
+                   
+
+
+                    symbol.setVisible(true);
+
+                    // LANDING BOUNCE
+                    game.scene.scenes[0]
+                    .tweens.add({
+
+                        targets: symbol,
+
+                        y: symbol.originalY + 10,
+
+                        duration: 80,
+
+                        yoyo: true,
+
+                        ease: 'Sine.easeOut'
+                    });
+                }
+
+                
+            }
+        }
+
+    }, col * 180);
+}
+
+                    
+
+    setTimeout(() => {
+
+    checkWin();
+
+    isSpinning = false;
+
+}, COLS * 180 + 200);
+
+    }, 2000);
+}
+
+function buyBonusRound() {
+
+    isSpinning = true;
+
+    resultText.setText(
+        "BUY BONUS..."
+    );
+
+    // CLEAR OLD MULTIPLIERS
+    activeMultiplierSprites.forEach(
+        sprite => sprite.destroy()
+    );
+
+    activeMultiplierSprites = [];
+    tumbleMultipliers = [];
+
     // SPIN EFFECT
     let spinInterval = setInterval(() => {
 
@@ -595,59 +1076,173 @@ currentBonusMultiplier = 0;
 
             for (let col = 0; col < COLS; col++) {
 
-                if (grid[row][col] !== null) {
+                let symbol =
+                    grid[row][col];
 
-                    let symbol =
-                        grid[row][col];
+                let randomSymbol =
+                    getRandomSymbol();
 
-                    let randomSymbol =
-                        getRandomSymbol();
-
-                    symbol.setTexture(
-                        randomSymbol
-                    );
-
-                    symbol.y =
-                        symbol.originalY +
-                        Phaser.Math.Between(-2, 2);
-                }
+                symbol.setTexture(
+                    randomSymbol
+                );
             }
         }
 
     }, 80);
+
+
 
     // STOP SPIN
     setTimeout(() => {
 
         clearInterval(spinInterval);
 
+        // RANDOM SYMBOLS
         for (let row = 0; row < ROWS; row++) {
 
             for (let col = 0; col < COLS; col++) {
 
-                if (grid[row][col] !== null) {
+                let randomSymbol =
+                    getRandomSymbol();
 
-                    let symbol =
-                        grid[row][col];
+                grid[row][col]
+                .setTexture(randomSymbol);
 
-                    let finalSymbol =
-                        getRandomSymbol();
-
-                    symbol.setTexture(
-                        finalSymbol
-                    );
-
-                    symbol.y =
-                        symbol.originalY;
-                }
+                grid[row][col]
+                .setVisible(true);
             }
         }
 
-        checkWin();
+        // FORCE 3 SCATTERS
+        let forcedPositions = [
 
-        isSpinning = false;
+            { row: 0, col: 1 },
+            { row: 2, col: 3 },
+            { row: 4, col: 5 }
+        ];
+
+        forcedPositions.forEach(pos => {
+
+            grid[pos.row][pos.col]
+            .setTexture('scatter');
+        });
+
+        resultText.setText(
+            "FREE SPINS WON!"
+        );
+
+        setTimeout(() => {
+
+            inFreeSpins = true;
+
+            freeSpins = 10;
+
+            freeSpinTotalWin = 0;
+
+            freeSpinsText.setText(
+                "FREE SPINS: " + freeSpins
+            );
+
+            isSpinning = false;
+
+            spinReels();
+
+        }, 1800);
 
     }, 2000);
+}
+
+function showBigWin(amount) {
+
+    let title = '';
+
+    // WIN LEVELS
+    if (amount >= 1000) {
+
+        title = 'MAX WIN';
+    }
+    else if (amount >= 500) {
+
+        title = 'SUPER WIN';
+    }
+    else if (amount >= 150) {
+
+        title = 'MEGA WIN';
+    }
+    else if (amount >= 50) {
+
+        title = 'BIG WIN';
+    }
+    else {
+
+        return;
+    }
+
+    bigWinText.setScale(0.2);
+
+    bigWinText.setAlpha(1);
+
+    bigWinText.setVisible(true);
+
+    let displayValue = {
+        value: 0
+    };
+
+    // POP ANIMATION
+    game.scene.scenes[0].tweens.add({
+
+        targets: bigWinText,
+
+        scaleX: 1,
+        scaleY: 1,
+
+        duration: 400,
+
+        ease: 'Back.easeOut'
+    });
+
+    // COUNT UP
+    game.scene.scenes[0].tweens.add({
+
+        targets: displayValue,
+
+        value: amount,
+
+        duration: 2500,
+
+        onUpdate: () => {
+
+            bigWinText.setText(
+
+                title +
+                '\n' +
+                Math.floor(displayValue.value)
+            );
+        },
+
+        onComplete: () => {
+
+            setTimeout(() => {
+
+                game.scene.scenes[0]
+                .tweens.add({
+
+                    targets: bigWinText,
+
+                    alpha: 0,
+
+                    duration: 500,
+
+                    onComplete: () => {
+
+                        bigWinText
+                        .setVisible(false);
+                    }
+                });
+
+            }, 1000);
+        }
+    });
 }
 
 function rollBonusMultiplier() {
@@ -695,7 +1290,7 @@ function rollBonusMultiplier() {
     sprite.setScale(0.06);
     sprite.setMask(reelMask);
 
-    sprite.setDepth(300);
+    sprite.setDepth(1);
 
     activeMultiplierSprites.push(
         sprite
@@ -898,8 +1493,10 @@ function checkWin() {
         if (counts[symbol] >= 8) {
 
             let winAmount =
-                symbolValues[symbol] *
-                counts[symbol];
+    (
+        symbolValues[symbol] *
+        counts[symbol]
+    ) * betAmount;
 
             totalWin += winAmount;
 
@@ -908,11 +1505,20 @@ function checkWin() {
 
                 for (let col = 0; col < COLS; col++) {
 
-                    if (
+                    let hasMultiplier =
+    tumbleMultipliers.some(
+        multi =>
+            multi.row === row &&
+            multi.col === col
+    );
+
+if (
     grid[row][col] !== null &&
     grid[row][col]
-    .texture.key === symbol
+        .texture.key === symbol &&
+    !hasMultiplier
 )
+    
                     {
 
                         backgrounds[row][col]
@@ -1001,17 +1607,20 @@ if (
 
     freeSpinTotalWin += bonusWin;
 
-    multiplierText.setText(
-        totalMultiplier + "x"
-    );
-
     resultText.setText(
-        "TOTAL WIN " +
-        tumbleTotalWin
-    );
+    "TOTAL WIN " +
+    tumbleTotalWin +
+    "  x" +
+    totalMultiplier
+);
+
+// HIDE OLD MULTIPLIER TEXT
+multiplierText.setText('');
 }
 
 isTumbling = false;
+// SHOW BIG WIN AFTER ALL TUMBLES
+showBigWin(tumbleTotalWin);
 
 setTimeout(() => {
 
@@ -1081,7 +1690,7 @@ setTimeout(() => {
     }
 });
 
-                }, 1500);
+                }, 4500);
 
                 return;
             }
@@ -1096,7 +1705,7 @@ setTimeout(() => {
 
                     spinReels();
 
-                }, 1500);
+                }, 4500);
             }
         }
 
@@ -1134,11 +1743,36 @@ function removeWinningSymbols(
             winningPositions[i];
 
         let symbol =
-            grid[pos.row][pos.col];
+    grid[pos.row][pos.col];
 
-        symbol.setVisible(false);
+// POP ANIMATION
+game.scene.scenes[0]
+.tweens.add({
 
-        grid[pos.row][pos.col] = null;
+    targets: symbol,
+
+    scaleX: 0.085,
+    scaleY: 0.085,
+
+    y: symbol.y - 12,
+
+    duration: 120,
+
+    yoyo: true,
+
+    repeat: 1,
+
+    ease: 'Sine.easeInOut'
+});
+
+// HIDE AFTER POP
+setTimeout(() => {
+
+    symbol.setVisible(false);
+
+grid[pos.row][pos.col] = null;
+
+}, 200);
 
         backgrounds[pos.row][pos.col]
             .setFillStyle(0x333333);
@@ -1148,20 +1782,50 @@ function removeWinningSymbols(
         "TOTAL WIN " + tumbleTotalWin
     );
 
-    // BONUS MULTIPLIERS
-if (inFreeSpins) {
-
-    rollBonusMultiplier();
-}
+    
 
 setTimeout(() => {
 
     dropSymbols();
 
-}, 500);
+}, 700);
 }
 function dropSymbols() {
 
+    // MOVE MULTIPLIERS DOWN FIRST
+    tumbleMultipliers.forEach(multi => {
+
+        let newRow = multi.row;
+
+        // FIND LOWEST EMPTY SPACE
+        while (
+            newRow + 1 < ROWS &&
+            grid[newRow + 1][multi.col] === null &&
+            !tumbleMultipliers.some(other =>
+                other !== multi &&
+                other.row === newRow + 1 &&
+                other.col === multi.col
+            )
+        ) {
+            newRow++;
+        }
+
+        // UPDATE ROW
+        multi.row = newRow;
+
+        // MOVE SPRITE
+        let targetY =
+            START_Y +
+            (newRow * SPACING_Y);
+
+        game.scene.scenes[0].tweens.add({
+            targets: multi.sprite,
+            y: targetY,
+            duration: 300
+        });
+    });
+
+    // NORMAL SYMBOL DROPS
     for (let col = 0; col < COLS; col++) {
 
         let symbolKeys = [];
@@ -1172,19 +1836,26 @@ function dropSymbols() {
             row--
         ) {
 
+            let hasMultiplier =
+                tumbleMultipliers.some(
+                    multi =>
+                        multi.row === row &&
+                        multi.col === col
+                );
+
             if (
-    grid[row][col] !== null
-) {
+                grid[row][col] !== null &&
+                !hasMultiplier
+            ) {
 
-    symbolKeys.push(
-        grid[row][col]
-        .texture.key
-    );
+                symbolKeys.push(
+    grid[row][col].texture.key
+);
 
-    grid[row][col].destroy();
+                grid[row][col].destroy();
 
-    grid[row][col] = null;
-}
+                grid[row][col] = null;
+            }
         }
 
         let currentRow = ROWS - 1;
@@ -1194,6 +1865,17 @@ function dropSymbols() {
             i < symbolKeys.length;
             i++
         ) {
+
+            // SKIP MULTIPLIER POSITIONS
+            while (
+                tumbleMultipliers.some(
+                    multi =>
+                        multi.row === currentRow &&
+                        multi.col === col
+                )
+            ) {
+                currentRow--;
+            }
 
             let x =
                 START_X +
@@ -1235,14 +1917,11 @@ function dropSymbols() {
         }
     }
 
+    setTimeout(() => {
 
+        spawnNewSymbols();
 
-
-setTimeout(() => {
-
-    spawnNewSymbols();
-
-}, 350);
+    }, 350);
 }
 
 function spawnNewSymbols() {
@@ -1276,6 +1955,86 @@ if (
 
                 let startY =
                     finalY - 300;
+
+// RANDOM BONUS MULTIPLIER SPAWN
+let shouldSpawnMultiplier =
+    inFreeSpins &&
+    Phaser.Math.Between(1, 100) <= 18 &&
+    !tumbleMultipliers.some(
+        multi =>
+            multi.row === row &&
+            multi.col === col
+    );
+
+if (shouldSpawnMultiplier) {
+
+    let multipliers = [
+
+        {
+            value: 2,
+            key: 'multi2'
+        },
+
+        {
+            value: 5,
+            key: 'multi5'
+        },
+
+        {
+            value: 10,
+            key: 'multi10'
+        }
+    ];
+
+    let picked =
+        Phaser.Utils.Array.GetRandom(
+            multipliers
+        );
+
+    let multiSprite =
+        game.scene.scenes[0]
+        .add.image(
+            x,
+            startY,
+            picked.key
+        );
+
+    multiSprite.setScale(0.06);
+
+    multiSprite.setMask(reelMask);
+
+    multiSprite.setDepth(5);
+
+    multiSprite.originalX = x;
+    multiSprite.originalY = finalY;
+
+    activeMultiplierSprites.push(
+        multiSprite
+    );
+
+    tumbleMultipliers.push({
+
+        value: picked.value,
+
+        sprite: multiSprite,
+
+        row: row,
+
+        col: col
+    });
+
+    game.scene.scenes[0]
+    .tweens.add({
+
+        targets: multiSprite,
+
+        y: finalY,
+
+        duration: 400
+    });
+
+    continue;
+}
 
                 let randomSymbol =
                     getRandomSymbol();
