@@ -121,6 +121,11 @@ const BONUS_BUY_COST = 100;
 function preload() {
 
     this.load.image(
+    'logo',
+    'assets/ui/logo.png'
+);
+
+    this.load.image(
     'bg',
     'assets/backgrounds/bg.png'
 );
@@ -218,6 +223,7 @@ function getRandomSymbol() {
 
 function create() {
 
+    
     // BACKGROUND
 let bg = this.add.image(
     500,
@@ -238,13 +244,17 @@ bg.setDepth(-100);
         Phaser.Textures.FilterMode.LINEAR
     );
 
+    let logo = this.add.image(
+    500,
+    108,
+    'logo'
+);
+
+logo.setScale(0.35);
+
 });
 
-    // TITLE
-    this.add.text(500, 40, 'MY SLOT MACHINE', {
-        fontSize: '40px',
-        color: '#ffffff'
-    }).setOrigin(0.5);
+    
 
     // CREDITS
 creditsText = this.add.text(
