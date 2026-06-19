@@ -847,8 +847,48 @@ for (let row = 0; row < ROWS; row++) {
 
     for (let col = 0; col < COLS; col++) {
 
+        // NORMAL SYMBOL
         finalSpinBoard[row][col] =
             getRandomSymbol();
+
+        // BONUS MULTIPLIER CHANCE
+        if (
+            inFreeSpins &&
+            Phaser.Math.Between(1,100) <= 12
+        ) {
+
+            let multipliers = [
+
+                {
+                    value: 2,
+                    key: 'multi2'
+                },
+
+                {
+                    value: 5,
+                    key: 'multi5'
+                },
+
+                {
+                    value: 10,
+                    key: 'multi10'
+                }
+            ];
+
+            let picked =
+                Phaser.Utils.Array.GetRandom(
+                    multipliers
+                );
+
+            finalSpinBoard[row][col] = {
+
+                multiplier: true,
+
+                value: picked.value,
+
+                key: picked.key
+            };
+        }
     }
 }
 
@@ -918,17 +958,53 @@ for (let row = 0; row < ROWS; row++) {
 
     for (let col = 0; col < COLS; col++) {
 
-        if (grid[row][col] !== null) {
+        let boardItem =
+            finalSpinBoard[row][col];
 
-            grid[row][col].setTexture(
-                finalSpinBoard[row][col]
+        let symbol =
+            grid[row][col];
+
+        if (symbol === null) {
+            continue;
+        }
+
+        // NORMAL SYMBOL
+        if (
+            typeof boardItem === 'string'
+        ) {
+
+            symbol.setTexture(
+                boardItem
             );
 
-            grid[row][col].y =
-                grid[row][col].originalY;
-
-            grid[row][col].setScale(0.06);
+            symbol.setVisible(true);
         }
+
+        // MULTIPLIER
+        else {
+
+            symbol.setTexture(
+                boardItem.key
+            );
+
+            symbol.setVisible(true);
+
+            tumbleMultipliers.push({
+
+                value: boardItem.value,
+
+                row: row,
+
+                col: col,
+
+                sprite: symbol
+            });
+        }
+
+        symbol.y =
+            symbol.originalY;
+
+        symbol.setScale(0.06);
     }
 }
 
@@ -945,30 +1021,22 @@ for (let row = 0; row < ROWS; row++) {
                 let symbol =
                     grid[row][col];
 
-                // BONUS MULTIPLIER CHANCE
-                let shouldSpawnMultiplier =
-                    inFreeSpins &&
-                    Phaser.Math.Between(1, 100) <= 12;
+                symbol.setVisible(true);
 
-                if (shouldSpawnMultiplier) {
+// LANDING BOUNCE
+game.scene.scenes[0]
+.tweens.add({
 
-                    let multipliers = [
+    targets: symbol,
 
-                        {
-                            value: 2,
-                            key: 'multi2'
-                        },
+    y: symbol.originalY + 10,
 
-                        {
-                            value: 5,
-                            key: 'multi5'
-                        },
+    duration: 80,
 
-                        {
-                            value: 10,
-                            key: 'multi10'
-                        }
-                    ];
+    yoyo: true,
+
+    ease: 'Sine.easeOut'
+});
 
                     let picked =
                         Phaser.Utils.Array.GetRandom(
