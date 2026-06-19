@@ -1023,104 +1023,27 @@ for (let row = 0; row < ROWS; row++) {
 
                 symbol.setVisible(true);
 
-// LANDING BOUNCE
-game.scene.scenes[0]
-.tweens.add({
+                game.scene.scenes[0]
+                .tweens.add({
 
-    targets: symbol,
+                    targets: symbol,
 
-    y: symbol.originalY + 10,
+                    y: symbol.originalY + 10,
 
-    duration: 80,
+                    duration: 80,
 
-    yoyo: true,
+                    yoyo: true,
 
-    ease: 'Sine.easeOut'
-});
-
-                    let picked =
-                        Phaser.Utils.Array.GetRandom(
-                            multipliers
-                        );
-
-                    symbol.setVisible(false);
-                    // RESET SCALE
-symbol.setScale(0.06);
-
-                    let multiSprite =
-                        game.scene.scenes[0]
-                        .add.image(
-                            symbol.x,
-                            symbol.y - 200,
-                            picked.key
-                        );
-
-                    multiSprite.setScale(0.06);
-
-                    multiSprite.setMask(reelMask);
-
-                    multiSprite.setDepth(5);
-
-                    activeMultiplierSprites.push(
-                        multiSprite
-                    );
-
-                    tumbleMultipliers.push({
-
-                        value: picked.value,
-
-                        sprite: multiSprite,
-
-                        row: row,
-
-                        col: col
-                    });
-
-                    game.scene.scenes[0]
-                    .tweens.add({
-
-                        targets: multiSprite,
-
-                        y: symbol.y,
-
-                        duration: 500,
-
-                        ease: 'Bounce.easeOut'
-                    });
-                }
-                else {
-
-                   
-
-
-                    symbol.setVisible(true);
-
-                    // LANDING BOUNCE
-                    game.scene.scenes[0]
-                    .tweens.add({
-
-                        targets: symbol,
-
-                        y: symbol.originalY + 10,
-
-                        duration: 80,
-
-                        yoyo: true,
-
-                        ease: 'Sine.easeOut'
-                    });
-                }
-
-                
+                    ease: 'Sine.easeOut'
+                });
             }
         }
 
     }, col * 180);
 }
 
-                    
-
-    setTimeout(() => {
+// CHECK WIN AFTER ALL REELS STOP
+setTimeout(() => {
 
     checkWin();
 
@@ -1128,7 +1051,7 @@ symbol.setScale(0.06);
 
 }, COLS * 180 + 200);
 
-    }, 2000);
+}, 2000);
 }
 
 function buyBonusRound() {
